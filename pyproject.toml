@@ -1,0 +1,149 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fas-research-framework"
+version = "1.0.0"
+description = "A comprehensive face anti-spoofing research framework"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Aseyed Mostafa", email = "aseyedmostafaho@gmail.com"},
+]
+keywords = [
+    "face-anti-spoofing",
+    "deep-learning",
+    "computer-vision",
+    "biometric-security",
+    "research-framework",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+dependencies = [
+    "torch>=1.9.0",
+    "torchvision>=0.10.0",
+    "numpy>=1.21.0",
+    "opencv-python>=4.5.0",
+    "albumentations>=1.0.0",
+    "scikit-learn>=1.0.0",
+    "matplotlib>=3.3.0",
+    "seaborn>=0.11.0",
+    "pandas>=1.3.0",
+    "tqdm>=4.62.0",
+    "Pillow>=8.3.0",
+    "timm>=0.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "isort>=5.0",
+    "flake8>=3.8",
+    "mypy>=0.910",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.15",
+    "sphinx-autodoc-typehints>=1.12",
+]
+all = [
+    "fas-research-framework[dev,docs]",
+]
+
+[project.scripts]
+fas-train = "fas_research_framework.scripts.train:main"
+fas-eval = "fas_research_framework.scripts.eval_protocol:main"
+fas-benchmark = "fas_research_framework.scripts.benchmark_mobilenetv4:main"
+
+[project.urls]
+Homepage = "https://github.com/AseyedMostafa/FAS-Research-Framework"
+Documentation = "https://github.com/AseyedMostafa/FAS-Research-Framework/blob/main/README.md"
+Repository = "https://github.com/AseyedMostafa/FAS-Research-Framework.git"
+Issues = "https://github.com/AseyedMostafa/FAS-Research-Framework/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fas_research_framework*"]
+
+[tool.setuptools.package-data]
+fas_research_framework = ["configs/*.py", "docs/*.md"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["fas_research_framework"]
+
+[tool.pytest.ini_options]
+testpaths = ["fas_research_framework/tools"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["fas_research_framework"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
