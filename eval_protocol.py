@@ -1,4 +1,4 @@
-'''MIT License
+"""MIT License
 Copyright (C) 2020 Prokofiev Kirill, Intel Corporation
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"),
@@ -14,9 +14,10 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
 OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.'''
+OR OTHER DEALINGS IN THE SOFTWARE."""
 
 import argparse
+import logging
 import os
 
 import albumentations as A
@@ -29,87 +30,111 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn import metrics
 from sklearn.metrics import auc, roc_curve
+from thop import clever_format, profile
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from thop import profile
-from thop import clever_format
-import logging
 
-from utils import (Transform, build_model, load_checkpoint, make_dataset,
-                   read_py_config, get_thresholdtable_from_fpr, get_tpr_from_threshold)
+from utils import (Transform, build_model, get_thresholdtable_from_fpr,
+                   get_tpr_from_threshold, load_checkpoint, make_dataset,
+                   read_py_config)
 
 stdout_handler = logging.StreamHandler()
-file_handler = logging.FileHandler('./logs/app.log')
+from configs.paths import ensure_directories, get_log_path
+
+# Ensure directories exist
+ensure_directories()
+
+file_handler = logging.FileHandler(get_log_path("app_log"))
 
 
-logging.basicConfig(level=logging.INFO,
-                        datefmt='%m/%d/%Y %I:%M:%S %p',
-                        format='%(asctime)s [%(levelname)s] %(message)s',
-                        handlers=[
-                            file_handler,
-                            stdout_handler
-                        ]
-                        )
+logging.basicConfig(
+    level=logging.INFO,
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[file_handler, stdout_handler],
+)
 
 logger = logging.getLogger(__name__)
 
+
 def main():
     # parsing arguments
-    parser = argparse.ArgumentParser(description='antispoofing training')
-    parser.add_argument('--draw_graph', default=False, type=bool, required=False,
-                        help='whether or not to draw graphics')
-    parser.add_argument('--GPU', default=0, type=int, required=False,
-                        help='specify which GPU to use')
-    parser.add_argument('--config', type=str, default=None, required=True,
-                        help='path to configuration file')
-    parser.add_argument('--device', type=str, default='cuda',
-                        help='if you want to eval model on cpu, pass "cpu" param')
+    parser = argparse.ArgumentParser(description="antispoofing training")
+    parser.add_argument(
+        "--draw_graph",
+        default=False,
+        type=bool,
+        required=False,
+        help="whether or not to draw graphics",
+    )
+    parser.add_argument(
+        "--GPU", default=0, type=int, required=False, help="specify which GPU to use"
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        required=True,
+        help="path to configuration file",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help='if you want to eval model on cpu, pass "cpu" param',
+    )
     args = parser.parse_args()
-
 
     # reading config and manage device
     path_to_config = args.config
     config = read_py_config(path_to_config)
-    device = args.device + f':{args.GPU}' if args.device == 'cuda' else 'cpu'
+    device = args.device + f":{args.GPU}" if args.device == "cuda" else "cpu"
 
     # building model
-    model = build_model(config, device, strict=True, mode='eval')
+    model = build_model(config, device, strict=True, mode="eval")
     model.to(device)
-    
 
     # load snapshot
-    path_to_experiment = os.path.join(config.checkpoint.experiment_path, config.checkpoint.snapshot_name)
-    epoch_of_checkpoint = load_checkpoint(path_to_experiment, model, map_location=device, optimizer=None)
+    path_to_experiment = os.path.join(
+        config.checkpoint.experiment_path, config.checkpoint.snapshot_name
+    )
+    epoch_of_checkpoint = load_checkpoint(
+        path_to_experiment, model, map_location=device, optimizer=None
+    )
 
     # preprocessing, making dataset and loader
     normalize = A.Normalize(**config.img_norm_cfg)
-    test_transform = A.Compose([
-                                A.Resize(**config.resize, interpolation=cv.INTER_CUBIC),
-                                normalize
-                               ])
+    test_transform = A.Compose(
+        [A.Resize(**config.resize, interpolation=cv.INTER_CUBIC), normalize]
+    )
     test_transform = Transform(val=test_transform)
-    test_dataset = make_dataset(config, val_transform=test_transform, mode='eval')
-    test_loader = DataLoader(dataset=test_dataset, batch_size=100, shuffle=True, num_workers=2)
+    test_dataset = make_dataset(config, val_transform=test_transform, mode="eval")
+    test_loader = DataLoader(
+        dataset=test_dataset, batch_size=100, shuffle=True, num_workers=2
+    )
 
     # computing metrics
-    auc_, eer, accur, apcer, bpcer, acer, fpr, tpr, hter  = evaluate(model, test_loader,
-                                                               config, device,
-                                                               compute_accuracy=True)
-    logger.info((f'eer = {round(eer*100,2)}\n'
-           + f'accuracy on test data = {round(np.mean(accur),3)}\n'
-           + f'auc = {round(auc_,3)}\n'
-           + f'hter = {round(hter,3)}\n'
-           + f'apcer = {round(apcer*100,2)}\n'
-           + f'bpcer = {round(bpcer*100,2)}\n'
-           + f'acer = {round(acer*100,2)}\n'
-           + f'checkpoint made on {epoch_of_checkpoint} epoch'))
+    auc_, eer, accur, apcer, bpcer, acer, fpr, tpr, hter = evaluate(
+        model, test_loader, config, device, compute_accuracy=True
+    )
+    logger.info(
+        (
+            f"eer = {round(eer*100,2)}\n"
+            + f"accuracy on test data = {round(np.mean(accur),3)}\n"
+            + f"auc = {round(auc_,3)}\n"
+            + f"hter = {round(hter,3)}\n"
+            + f"apcer = {round(apcer*100,2)}\n"
+            + f"bpcer = {round(bpcer*100,2)}\n"
+            + f"acer = {round(acer*100,2)}\n"
+            + f"checkpoint made on {epoch_of_checkpoint} epoch"
+        )
+    )
 
     input = torch.randn(1, 3, config.resize.height, config.resize.width).to(device)
-    macs, params = profile(model, inputs=(input, ))
+    macs, params = profile(model, inputs=(input,))
     macs, params = clever_format([macs, params], "%.3f")
     logger.info(f"Computational complexity:\t{macs} flops")
     logger.info(f"Number of parameters:\t{params}")
-
 
     # draw graphics if needed
     # if args.draw_graph:
@@ -117,12 +142,13 @@ def main():
     plot_roc_curve(fpr, tpr, config)
     det_curve(fpr, fnr, eer, config)
 
+
 def evaluate(model, loader, config, device, compute_accuracy=True):
-    ''' evaluating AUC, EER, BPCER, APCER, ACER on given data loader and model '''
+    """evaluating AUC, EER, BPCER, APCER, ACER on given data loader and model"""
     model.eval()
     proba_accum = np.array([])
     target_accum = np.array([])
-    accur=[]
+    accur = []
     tp, tn, fp, fn = 0, 0, 0, 0
     loop = tqdm(enumerate(loader), total=len(loader), leave=False)
     for i, (image, target) in loop:
@@ -133,7 +159,7 @@ def evaluate(model, loader, config, device, compute_accuracy=True):
             target = target[:, 0].reshape(-1).to(device)
         with torch.no_grad():
             features = model(image)
-            
+
             model1 = model
             output = model1.make_logits(features, all=False)
             if isinstance(output, tuple):
@@ -142,9 +168,10 @@ def evaluate(model, loader, config, device, compute_accuracy=True):
             y_true = target.detach().cpu().numpy()
             y_pred = output.argmax(dim=1).detach().cpu().numpy()
 
-            tn_batch, fp_batch, fn_batch, tp_batch = metrics.confusion_matrix(y_true=y_true,
-                                                                              y_pred=y_pred,
-                                                                              ).ravel()
+            tn_batch, fp_batch, fn_batch, tp_batch = metrics.confusion_matrix(
+                y_true=y_true,
+                y_pred=y_pred,
+            ).ravel()
             tp += tp_batch
             tn += tn_batch
             fp += fp_batch
@@ -152,22 +179,20 @@ def evaluate(model, loader, config, device, compute_accuracy=True):
 
             if compute_accuracy:
                 accur.append((y_pred == y_true).mean())
-            if config.loss.amsoftmax.margin_type in ('cos', 'arcos'):
+            if config.loss.amsoftmax.margin_type in ("cos", "arcos"):
                 output *= config.loss.amsoftmax.s
-            positive_probabilities = F.softmax(output, dim=-1)[:,1].cpu().numpy()
+            positive_probabilities = F.softmax(output, dim=-1)[:, 1].cpu().numpy()
         proba_accum = np.concatenate((proba_accum, positive_probabilities))
         target_accum = np.concatenate((target_accum, y_true))
 
-
     fpr_list = [0.01, 0.005, 0.001]
-    threshold_list = get_thresholdtable_from_fpr(proba_accum,target_accum, fpr_list)
-    tpr_list = get_tpr_from_threshold(proba_accum,target_accum, threshold_list)
-      
-    # Show the result into score_path/score.txt  
-    logger.info('TPR@FPR=10E-3: {}\n'.format(tpr_list[0]))
-    logger.info('TPR@FPR=5E-3: {}\n'.format(tpr_list[1]))
-    logger.info('TPR@FPR=10E-4: {}\n'.format(tpr_list[2]))
+    threshold_list = get_thresholdtable_from_fpr(proba_accum, target_accum, fpr_list)
+    tpr_list = get_tpr_from_threshold(proba_accum, target_accum, threshold_list)
 
+    # Show the result into score_path/score.txt
+    logger.info("TPR@FPR=10E-3: {}\n".format(tpr_list[0]))
+    logger.info("TPR@FPR=5E-3: {}\n".format(tpr_list[1]))
+    logger.info("TPR@FPR=10E-4: {}\n".format(tpr_list[2]))
 
     apcer = fp / (tn + fp) if (tn + fp) != 0 else 0
     bpcer = fn / (fn + tp) if (fn + tp) != 0 else 0
@@ -180,91 +205,99 @@ def evaluate(model, loader, config, device, compute_accuracy=True):
     hter = (fpr_eer + fnr_eer) / 2
     eer = min(fpr_eer, fnr_eer)
     auc_ = auc(fpr, tpr)
-    to_return = ((auc_, eer, accur, apcer, bpcer, acer, fpr, tpr, hter)
-                if compute_accuracy
-                else (auc_, eer, apcer, bpcer, acer, hter))
+    to_return = (
+        (auc_, eer, accur, apcer, bpcer, acer, fpr, tpr, hter)
+        if compute_accuracy
+        else (auc_, eer, apcer, bpcer, acer, hter)
+    )
     return to_return
+
 
 def plot_roc_curve(fpr, tpr, config):
     plt.figure()
     plt.xlim([-0.01, 1.00])
     plt.ylim([-0.01, 1.00])
     plt.plot(fpr, tpr, lw=3, label="ROC curve (area= {:0.2f})".format(auc(fpr, tpr)))
-    plt.xlabel('FPR', fontsize=16)
-    plt.ylabel('TPR', fontsize=16)
-    plt.title('ROC curve', fontsize=16)
-    plt.legend(loc='lower right', fontsize=13)
-    plt.plot([0,1],[0,1], lw=3, linestyle='--', color='navy')
-    plt.savefig(os.path.join(config.checkpoint.experiment_path, config.curves.roc_curve))
+    plt.xlabel("FPR", fontsize=16)
+    plt.ylabel("TPR", fontsize=16)
+    plt.title("ROC curve", fontsize=16)
+    plt.legend(loc="lower right", fontsize=13)
+    plt.plot([0, 1], [0, 1], lw=3, linestyle="--", color="navy")
+    plt.savefig(
+        os.path.join(config.checkpoint.experiment_path, config.curves.roc_curve)
+    )
 
-def det_curve(fps,fns, eer, config):
+
+def det_curve(fps, fns, eer, config):
     """
     Given false positive and false negative rates, produce a DET Curve.
     The false positive rate is assumed to be increasing while the false
     negative rate is assumed to be decreasing.
     """
-    fig,ax = plt.subplots(figsize=(8,8))
-    plt.plot(fps,fns, label=f"DET curve, EER%={round(eer*100, 3)}")
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.xlabel('FAR', fontsize=16)
-    plt.ylabel('FRR', fontsize=16)
-    ticks_to_use = [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1]
+    fig, ax = plt.subplots(figsize=(8, 8))
+    plt.plot(fps, fns, label=f"DET curve, EER%={round(eer*100, 3)}")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.xlabel("FAR", fontsize=16)
+    plt.ylabel("FRR", fontsize=16)
+    ticks_to_use = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
     ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
     ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
     ax.set_xticks(ticks_to_use)
     ax.set_yticks(ticks_to_use)
     plt.xticks(rotation=45)
-    plt.axis([0.001,1,0.001,1])
-    plt.title('DET curve', fontsize=20)
-    plt.legend(loc='upper right', fontsize=16)
-    fig.savefig(os.path.join(config.checkpoint.experiment_path, config.curves.det_curve))
+    plt.axis([0.001, 1, 0.001, 1])
+    plt.title("DET curve", fontsize=20)
+    plt.legend(loc="upper right", fontsize=16)
+    fig.savefig(
+        os.path.join(config.checkpoint.experiment_path, config.curves.det_curve)
+    )
 
 
 def eval_withxgb(config, device, data_path):
     import joblib
     import pandas as pd
 
-    path = (os.path.join(config.datasets.Celeba_root,'metas/intra_test'))
-    pretest_data_path = (os.path.join(path, data_path))
-    model = joblib.load('./model.pkl')
+    path = os.path.join(config.datasets.Celeba_root, "metas/intra_test")
+    pretest_data_path = os.path.join(path, data_path)
+    from configs.paths import get_model_path
+
+    model = joblib.load(get_model_path("model_file"))
     dtf_test = pd.read_csv(pretest_data_path)
 
-    features = dtf_test.columns[~dtf_test.columns.isin(['label'])]
+    features = dtf_test.columns[~dtf_test.columns.isin(["label"])]
     preds = model.predict(dtf_test[features])
-
 
     proba_accum = np.array([])
     target_accum = np.array([])
-    accur=[]
+    accur = []
     tp, tn, fp, fn = 0, 0, 0, 0
-    logger.info(metrics.confusion_matrix(dtf_test['label'],
-                        list(preds)))     
+    logger.info(metrics.confusion_matrix(dtf_test["label"], list(preds)))
 
-    tn_batch, fp_batch, fn_batch, tp_batch = metrics.confusion_matrix(y_true=dtf_test['label'],
-                                                                            y_pred=preds,
-                                                                            ).ravel()
+    tn_batch, fp_batch, fn_batch, tp_batch = metrics.confusion_matrix(
+        y_true=dtf_test["label"],
+        y_pred=preds,
+    ).ravel()
     tp += tp_batch
     tn += tn_batch
     fp += fp_batch
     fn += fn_batch
 
-    accur.append((preds == dtf_test['label']).mean())
+    accur.append((preds == dtf_test["label"]).mean())
     pred_t = torch.from_numpy(preds).float()
     logger.info(pred_t)
     positive_probabilities = F.softmax(pred_t, dim=-1).cpu().numpy()
     proba_accum = np.concatenate((proba_accum, preds))
-    target_accum = np.concatenate((target_accum, dtf_test['label']))
+    target_accum = np.concatenate((target_accum, dtf_test["label"]))
 
     fpr_list = [0.01, 0.005, 0.001]
-    threshold_list = get_thresholdtable_from_fpr(proba_accum,target_accum, fpr_list)
-    tpr_list = get_tpr_from_threshold(proba_accum,target_accum, threshold_list)
-    
-    # Show the result into score_path/score.txt  
-    logger.info('TPR@FPR=10E-3: {}\n'.format(tpr_list[0]))
-    logger.info('TPR@FPR=5E-3: {}\n'.format(tpr_list[1]))
-    logger.info('TPR@FPR=10E-4: {}\n'.format(tpr_list[2]))
+    threshold_list = get_thresholdtable_from_fpr(proba_accum, target_accum, fpr_list)
+    tpr_list = get_tpr_from_threshold(proba_accum, target_accum, threshold_list)
 
+    # Show the result into score_path/score.txt
+    logger.info("TPR@FPR=10E-3: {}\n".format(tpr_list[0]))
+    logger.info("TPR@FPR=5E-3: {}\n".format(tpr_list[1]))
+    logger.info("TPR@FPR=10E-4: {}\n".format(tpr_list[2]))
 
     apcer = fp / (tn + fp) if (tn + fp) != 0 else 0
     bpcer = fn / (fn + tp) if (fn + tp) != 0 else 0
@@ -278,21 +311,23 @@ def eval_withxgb(config, device, data_path):
     eer = min(fpr_eer, fnr_eer)
     auc_ = auc(fpr, tpr)
 
-
-    logger.info((f'eer = {round(eer*100,2)}\n'
-        + f'accuracy on test data = {round(np.mean(accur),3)}\n'
-        + f'auc = {round(auc_,3)}\n'
-        + f'hter = {round(hter,3)}\n'
-        + f'apcer = {round(apcer*100,2)}\n'
-        + f'bpcer = {round(bpcer*100,2)}\n'
-        + f'acer = {round(acer*100,2)}\n'))
+    logger.info(
+        (
+            f"eer = {round(eer*100,2)}\n"
+            + f"accuracy on test data = {round(np.mean(accur),3)}\n"
+            + f"auc = {round(auc_,3)}\n"
+            + f"hter = {round(hter,3)}\n"
+            + f"apcer = {round(apcer*100,2)}\n"
+            + f"bpcer = {round(bpcer*100,2)}\n"
+            + f"acer = {round(acer*100,2)}\n"
+        )
+    )
 
     fnr = 1 - tpr
     plot_roc_curve(fpr, tpr, config)
     det_curve(fpr, fnr, eer, config)
 
-    return 
-
+    return
 
 
 if __name__ == "__main__":

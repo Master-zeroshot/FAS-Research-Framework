@@ -21,6 +21,7 @@ from functools import partial
 from .celeba_spoof import CelebASpoofDataset
 from .lcc_fasd import LccFasdDataset
 
+
 def do_nothing(**args):
     pass
 

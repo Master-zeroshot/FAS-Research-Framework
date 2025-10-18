@@ -1,4 +1,4 @@
-'''MIT License
+"""MIT License
 Copyright (C) 2020 Prokofiev Kirill, Intel Corporation
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"),
@@ -14,84 +14,98 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
 OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.'''
+OR OTHER DEALINGS IN THE SOFTWARE."""
 
 import argparse
 import json
 import os
-import shutil
-from tqdm import tqdm
 import random
+import shutil
+
+from tqdm import tqdm
+
 random.seed(42)
 
+
 def main():
-    parser = argparse.ArgumentParser(description='CelebA_Spoof json preparation')
-    parser.add_argument('--root', type=str, default=None, required=True,
-                        help='path to root folder of the CelebA_Spoof')
+    parser = argparse.ArgumentParser(description="CelebA_Spoof json preparation")
+    parser.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        required=True,
+        help="path to root folder of the CelebA_Spoof",
+    )
     args = parser.parse_args()
     # split_train_cal(root_folder=args.root)
-    create_json(mode='train', root_folder=args.root)
-    create_json(mode='val', root_folder=args.root)
-    create_json(mode='test', root_folder=args.root)
+    create_json(mode="train", root_folder=args.root)
+    create_json(mode="val", root_folder=args.root)
+    create_json(mode="test", root_folder=args.root)
+
 
 def split_train_cal(root_folder):
-    indx=0
+    indx = 0
     items = {}
-    
-    list_train_path = os.path.join(root_folder, 'metas/intra_test/train_label.json')
-    new_list_train_path = os.path.join(root_folder, 'metas/intra_test/new_train_label.json')
-    list_val_path = os.path.join(root_folder, 'metas/intra_test/val_label.json')
-    new_train_data = dict()
-    with open(list_train_path, 'r') as f:
-        train_data = json.load(f)
-        print('split to val data')
-        val_data = dict(random.sample(list(train_data.items()), len(train_data)//5))
 
-        print('new train list')
+    list_train_path = os.path.join(root_folder, "metas/intra_test/train_label.json")
+    new_list_train_path = os.path.join(
+        root_folder, "metas/intra_test/new_train_label.json"
+    )
+    list_val_path = os.path.join(root_folder, "metas/intra_test/val_label.json")
+    new_train_data = dict()
+    with open(list_train_path, "r") as f:
+        train_data = json.load(f)
+        print("split to val data")
+        val_data = dict(random.sample(list(train_data.items()), len(train_data) // 5))
+
+        print("new train list")
         new_train_data = {k: v for k, v in train_data.items() if k not in val_data}
         print(len(train_data))
         print(len(val_data))
         print(len(new_train_data))
-        print(len(new_train_data)/ len(val_data))
+        print(len(new_train_data) / len(val_data))
         a = list(val_data.keys())
         print(a[0])
-    
-    with open(new_list_train_path, 'w') as f:
+
+    with open(new_list_train_path, "w") as f:
         json.dump(new_train_data, f)
 
-    with open(list_val_path, 'w') as f:
+    with open(list_val_path, "w") as f:
         json.dump(val_data, f)
 
 
 def create_json(mode, root_folder):
-    if mode == 'test':
-        list_path = os.path.join(root_folder, 'metas/intra_test/test_label.json')
-        save_file = os.path.join(root_folder, 'metas/intra_test/items_test.json')
-    elif mode == 'val':
-        list_path = os.path.join(root_folder, 'metas/intra_test/val_label.json')
-        save_file = os.path.join(root_folder, 'metas/intra_test/items_val.json')
+    if mode == "test":
+        list_path = os.path.join(root_folder, "metas/intra_test/test_label.json")
+        save_file = os.path.join(root_folder, "metas/intra_test/items_test.json")
+    elif mode == "val":
+        list_path = os.path.join(root_folder, "metas/intra_test/val_label.json")
+        save_file = os.path.join(root_folder, "metas/intra_test/items_val.json")
     else:
-        assert mode == 'train'
-        list_path = os.path.join(root_folder, 'metas/intra_test/new_train_label.json')
-        save_file = os.path.join(root_folder, 'metas/intra_test/items_train.json')
-    indx=0
+        assert mode == "train"
+        list_path = os.path.join(root_folder, "metas/intra_test/new_train_label.json")
+        save_file = os.path.join(root_folder, "metas/intra_test/items_train.json")
+    indx = 0
     items = {}
 
-    with open(list_path, 'r') as f:
+    with open(list_path, "r") as f:
         data = json.load(f)
-        print('Reading dataset info...')
+        print("Reading dataset info...")
         for indx, path in tqdm(enumerate(data), leave=False):
-            labels = data[path] # create list with labels
-            bbox_path = os.path.join(root_folder, os.path.splitext(path)[0] + '_BB.txt')
-            bbox_f = open(bbox_path, 'r')
+            labels = data[path]  # create list with labels
+            bbox_path = os.path.join(root_folder, os.path.splitext(path)[0] + "_BB.txt")
+            bbox_f = open(bbox_path, "r")
             bbox_info = bbox_f.readline().strip().split()[0:4]
-            bbox = [int(x) for x in bbox_info] # create bbox with labels
-            if len(bbox) < 4 or bbox[2] < 3 or bbox[3] < 3: # filter not existing or too small boxes
-                print('Bad bounding box: ', bbox, path)
+            bbox = [int(x) for x in bbox_info]  # create bbox with labels
+            if (
+                len(bbox) < 4 or bbox[2] < 3 or bbox[3] < 3
+            ):  # filter not existing or too small boxes
+                print("Bad bounding box: ", bbox, path)
 
-            items[indx] = {'path':path, 'labels':labels, 'bbox':bbox}
-    with open(save_file, 'w') as f:
+            items[indx] = {"path": path, "labels": labels, "bbox": bbox}
+    with open(save_file, "w") as f:
         json.dump(items, f)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

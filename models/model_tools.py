@@ -1,4 +1,4 @@
-'''MIT License
+"""MIT License
 Copyright (C) 2020 Prokofiev Kirill
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"),
@@ -14,7 +14,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
 OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.'''
+OR OTHER DEALINGS IN THE SOFTWARE."""
 
 import math
 
@@ -24,8 +24,18 @@ import torch.nn.functional as F
 
 
 class Conv2d_cd(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1,
-                 padding=1, dilation=1, groups=1, bias=False, theta=0):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        dilation=1,
+        groups=1,
+        bias=False,
+        theta=0,
+    ):
 
         super().__init__()
         self.theta = theta
@@ -34,55 +44,79 @@ class Conv2d_cd(nn.Module):
         self.dilation = dilation
         self.groups = groups
         if self.groups > 1:
-            self.weight = nn.Parameter(kaiming_init(out_channels, in_channels//in_channels, kernel_size))
+            self.weight = nn.Parameter(
+                kaiming_init(out_channels, in_channels // in_channels, kernel_size)
+            )
         else:
-            self.weight = nn.Parameter(kaiming_init(out_channels, in_channels, kernel_size))
+            self.weight = nn.Parameter(
+                kaiming_init(out_channels, in_channels, kernel_size)
+            )
         self.padding = padding
         self.i = 0
 
     def forward(self, x):
-        out_normal = F.conv2d(input=x, weight=self.weight, bias=self.bias, dilation=self.dilation,
-                              stride=self.stride, padding=self.padding, groups=self.groups)
+        out_normal = F.conv2d(
+            input=x,
+            weight=self.weight,
+            bias=self.bias,
+            dilation=self.dilation,
+            stride=self.stride,
+            padding=self.padding,
+            groups=self.groups,
+        )
         if math.fabs(self.theta - 0.0) < 1e-8:
             return out_normal
         else:
-            kernel_diff = self.weight.sum(dim=(2,3), keepdim=True)
-            out_diff = F.conv2d(input=x, weight=kernel_diff, bias=self.bias, dilation=self.dilation,
-                                stride=self.stride, padding=0, groups=self.groups)
+            kernel_diff = self.weight.sum(dim=(2, 3), keepdim=True)
+            out_diff = F.conv2d(
+                input=x,
+                weight=kernel_diff,
+                bias=self.bias,
+                dilation=self.dilation,
+                stride=self.stride,
+                padding=0,
+                groups=self.groups,
+            )
             return out_normal - self.theta * out_diff
 
+
 def kaiming_init(c_out, c_in, k):
-    return torch.randn(c_out, c_in, k, k)*math.sqrt(2./c_in)
+    return torch.randn(c_out, c_in, k, k) * math.sqrt(2.0 / c_in)
 
 
 class Dropout(nn.Module):
-    DISTRIBUTIONS = ['bernoulli', 'gaussian', 'none']
+    DISTRIBUTIONS = ["bernoulli", "gaussian", "none"]
 
-    def __init__(self, p=0.5, mu=0.5, sigma=0.3, dist='bernoulli', linear=False):
+    def __init__(self, p=0.5, mu=0.5, sigma=0.3, dist="bernoulli", linear=False):
         super().__init__()
 
         self.dist = dist
         assert self.dist in Dropout.DISTRIBUTIONS
 
         self.p = float(p)
-        assert 0. <= self.p <= 1.
+        assert 0.0 <= self.p <= 1.0
 
         self.mu = float(mu)
         self.sigma = float(sigma)
-        assert self.sigma > 0.
+        assert self.sigma > 0.0
         # need to distinct 2d and 1d dropout
         self.linear = linear
+
     def forward(self, x):
-        if self.dist == 'bernoulli' and not self.linear:
+        if self.dist == "bernoulli" and not self.linear:
             out = F.dropout2d(x, self.p, self.training)
-        elif self.dist == 'bernoulli' and self.linear:
+        elif self.dist == "bernoulli" and self.linear:
             out = F.dropout(x, self.p, self.training)
-        elif self.dist == 'gaussian':
+        elif self.dist == "gaussian":
             if self.training:
                 with torch.no_grad():
-                    soft_mask = x.new_empty(x.size()).normal_(self.mu, self.sigma).clamp_(0., 1.)
+                    soft_mask = (
+                        x.new_empty(x.size())
+                        .normal_(self.mu, self.sigma)
+                        .clamp_(0.0, 1.0)
+                    )
 
-                scale = 1. / self.mu
+                scale = 1.0 / self.mu
                 out = scale * soft_mask * x
             else:
                 out = x
@@ -115,10 +149,10 @@ class SELayer(nn.Module):
         super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
-                nn.Linear(channel, make_divisible(channel // reduction, 8)),
-                nn.ReLU(inplace=True),
-                nn.Linear(make_divisible(channel // reduction, 8), channel),
-                h_sigmoid()
+            nn.Linear(channel, make_divisible(channel // reduction, 8)),
+            nn.ReLU(inplace=True),
+            nn.Linear(make_divisible(channel // reduction, 8), channel),
+            h_sigmoid(),
         )
 
     def forward(self, x):
@@ -132,29 +166,29 @@ def conv_3x3_in(inp, oup, stride, theta):
     return nn.Sequential(
         Conv2d_cd(inp, oup, 3, stride, 1, bias=False, theta=theta),
         nn.InstanceNorm2d(oup),
-        h_swish()
+        h_swish(),
     )
+
 
 def conv_3x3_bn(inp, oup, stride, theta):
     return nn.Sequential(
         Conv2d_cd(inp, oup, 3, stride, 1, bias=False, theta=theta),
         nn.BatchNorm2d(oup),
-        h_swish()
+        h_swish(),
     )
+
 
 def conv_1x1_bn(inp, oup):
     return nn.Sequential(
-        nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm2d(oup),
-        h_swish()
+        nn.Conv2d(inp, oup, 1, 1, 0, bias=False), nn.BatchNorm2d(oup), h_swish()
     )
+
 
 def conv_1x1_in(inp, oup):
     return nn.Sequential(
-        nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
-        nn.InstanceNorm2d(oup),
-        h_swish()
+        nn.Conv2d(inp, oup, 1, 1, 0, bias=False), nn.InstanceNorm2d(oup), h_swish()
     )
+
 
 def make_divisible(v, divisor, min_value=None):
     """
@@ -175,11 +209,22 @@ def make_divisible(v, divisor, min_value=None):
         new_v += divisor
     return new_v
 
+
 class MobileNet(nn.Module):
     """parent class for mobilenets"""
-    def __init__(self, width_mult, prob_dropout, type_dropout,
-                 prob_dropout_linear, embeding_dim, mu, sigma,
-                 theta, multi_heads):
+
+    def __init__(
+        self,
+        width_mult,
+        prob_dropout,
+        type_dropout,
+        prob_dropout_linear,
+        embeding_dim,
+        mu,
+        sigma,
+        theta,
+        multi_heads,
+    ):
         super().__init__()
         self.prob_dropout = prob_dropout
         self.type_dropout = type_dropout
@@ -219,7 +264,7 @@ class MobileNet(nn.Module):
             return spoof_out, type_spoof, lightning_type, real_atr
         return spoof_out
 
-    def forward_to_onnx(self,x):
+    def forward_to_onnx(self, x):
         x = self.features(x)
         x = self.conv_last(x)
         x = self.avgpool(x)
@@ -227,5 +272,5 @@ class MobileNet(nn.Module):
         spoof_out = self.spoofer(x)
         if isinstance(spoof_out, tuple):
             spoof_out = spoof_out[0]
-        probab = F.softmax(spoof_out*self.scaling, dim=-1)
+        probab = F.softmax(spoof_out * self.scaling, dim=-1)
         return probab
